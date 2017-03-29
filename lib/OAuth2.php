@@ -70,6 +70,14 @@ class OAuth2
     protected $oldRefreshToken = null;
 
     /**
+     * Keep track of the old origin_user token. So we can apply
+     * the old origin_user tokens when a new one is issued.
+     *
+     * @var int
+     */
+    protected $oldOriginUserId = null;
+
+    /**
      * Keep track of the used auth code. So we can mark it
      * as used after successful authorization
      *
@@ -995,6 +1003,7 @@ class OAuth2
 
         // store the refresh token locally so we can delete it when a new refresh token is generated
         $this->oldRefreshToken = $token->getToken();
+        $this->oldOriginUserId = $token->getOriginUserId();
 
         return array(
             'scope' => $token->getScope(),
@@ -1336,6 +1345,7 @@ class OAuth2
             "expires_in" => ($access_token_lifetime ?: $this->getVariable(self::CONFIG_ACCESS_LIFETIME)),
             "token_type" => $this->getVariable(self::CONFIG_TOKEN_TYPE),
             "scope" => $scope,
+            "origin_user_id" => $this->oldOriginUserId
         );
 
         $this->storage->createAccessToken(
@@ -1343,7 +1353,8 @@ class OAuth2
             $client,
             $data,
             time() + ($access_token_lifetime ?: $this->getVariable(self::CONFIG_ACCESS_LIFETIME)),
-            $scope
+            $scope,
+            $this->oldOriginUserId
         );
 
         // Issue a refresh token also, if we support them
@@ -1354,13 +1365,15 @@ class OAuth2
                 $client,
                 $data,
                 time() + ($refresh_token_lifetime ?: $this->getVariable(self::CONFIG_REFRESH_LIFETIME)),
-                $scope
+                $scope,
+                $this->oldOriginUserId
             );
 
             // If we've granted a new refresh token, expire the old one
             if (null !== $this->oldRefreshToken) {
                 $this->storage->unsetRefreshToken($this->oldRefreshToken);
                 $this->oldRefreshToken = null;
+                $this->oldOriginUserId = null;
             }
         }
 
